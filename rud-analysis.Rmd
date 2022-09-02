@@ -1,0 +1,152 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+pacman::p_load(pacman, dplyr, GGally, ggplot2, ggthemes, 
+  ggvis, httr, lubridate, plotly, rio, rmarkdown, shiny, 
+  stringr, tidyr)
+dim(tyr.data1)
+```
+
+```{r}
+summary(tyr.data1)
+```
+
+```{r}
+summary(tyr.data1$Subject)
+```
+
+```{r}
+sub1 <- 0
+ref.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "reference"], na.rm = T)
+com.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "comparison"], na.rm = T)
+head(ref.RT) #mean RT for reference trials (updating)
+head(com.RT) #mean RT for comparison trials (no updating)
+```
+```{r}
+tyr.ref.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "reference"]
+                   [tyr.data1$Treatment == "Tyr"], na.rm = T)
+pla.ref.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "reference"] 
+                   [tyr.data1$Treatment == "Pla"], na.rm = T)
+tyr.com.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "comparison"]
+                   [tyr.data1$Treatment == "Tyr"], na.rm = T)
+pla.com.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "comparison"]
+                   [tyr.data1$Treatment == "Pla"], na.rm = T)
+head(tyr.ref.RT) #mean RT for reference trials with tyrosin manipulation
+head(pla.ref.RT) #mean RT for reference trials with placebo
+head(tyr.com.RT) #mean RT for comparison trials with tyrosin manipulation
+head(pla.com.RT) #mean RT for comparison trials with placebo
+```
+
+```{r}
+updating <- ref.RT - com.RT #updating occurs only in reference trials, hence updating cost as difference in RT between reference and comparison trials
+add.tyr.ref <- tyr.ref.RT - pla.ref.RT #difference in RT of Tyrosin manipulation in reference trials
+add.tyr.com <- tyr.com.RT - pla.com.RT #difference in RT of Tyrosin manipulation in comparison trials
+updating.pla <- pla.ref.RT - pla.com.RT #updating cost with Tyrosin manipulation
+updating.tyr <- tyr.ref.RT - tyr.com.RT #updating cost with Placebo
+head(updating.tyr)
+head(updating.pla)
+```
+
+```{r}
+(same.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Same"], na.rm = T)) #mean RT for match decision
+(diff.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Diff"], na.rm = T)) #mean RT for mismatch decision
+(match.RT <- diff.RT - same.RT) #cost of matching decision (as baseline for substitution)
+```
+
+```{r}
+(tyr.same.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Same"]
+                    [tyr.data1$Treatment == "Tyr"], na.rm = T)) #mean RT for match decision with Tyrosin
+(pla.same.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Same"]
+                    [tyr.data1$Treatment == "Pla"], na.rm = T)) #mean RT for match decision with Placebo
+(tyr.diff.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Diff"]
+                    [tyr.data1$Treatment == "Tyr"], na.rm = T)) #mean RT for mismatch decision with Tyrosin
+(pla.diff.RT <- mean(tyr.data1$Stimulus.RT[tyr.data1$SameDiff == "Diff"]
+                    [tyr.data1$Treatment == "Pla"], na.rm = T)) #mean RT for mismatch decision with Placebo
+```
+```{r}
+add.tyr.same <- tyr.same.RT - pla.same.RT #additional matching cost with Tyrosin manipulation
+add.tyr.diff <- tyr.diff.RT - pla.diff.RT #additional mismatching cost with Tyrosin manipulation
+(tyr.match.RT <- tyr.diff.RT - tyr.same.RT) #cost of matching decision with Tyrosin manipulation
+(pla.match.RT <- pla.diff.RT - pla.same.RT) #cost of matching decision with placebo
+
+```
+
+```{r}
+(switch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "reference"]
+                   [tyr.data1$PrevTrialType == "comparison"], na.rm = T))        #gate opening
+(noswitch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "reference"]
+                     [tyr.data1$PrevTrialType == "reference"], na.rm = T))       #no gate opening (already open)
+```
+
+```{r}
+gate.opening <- switch.ref - noswitch.ref #gate opening only in switch trials (Comparison, Reference), thus gate opening cost as (Comparison, Reference) - (Reference, Reference)
+```
+```{r}
+(tyr.switch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Tyr"]
+                    [tyr.data1$TrialType == "reference"]
+                    [tyr.data1$PrevTrialType == "comparison"], 
+                    na.rm = T))                                                   #gate opening
+(pla.switch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Pla"]
+                    [tyr.data1$TrialType == "reference"]
+                    [tyr.data1$PrevTrialType == "comparison"], 
+                    na.rm = T))
+(tyr.noswitch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Tyr"]
+                      [tyr.data1$TrialType == "reference"]
+                      [tyr.data1$PrevTrialType == "reference"], 
+                      na.rm = T))                                                 #no gate opening (already open)
+(pla.noswitch.ref <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Pla"]
+                      [tyr.data1$TrialType == "reference"]
+                      [tyr.data1$PrevTrialType == "reference"], 
+                      na.rm = T))
+```
+```{r}
+(add.tyr.switch.ref <- tyr.switch.ref - pla.switch.ref) #difference in RT of Tyrosin manipulation in reference trials
+(add.tyr.noswitch.ref <- tyr.noswitch.ref - pla.noswitch.ref) #difference in RT of Tyrosin manipulation in comparison trials
+```
+```{r}
+(tyr.gate.opening <- tyr.switch.ref - tyr.noswitch.ref)
+(pla.gate.opening <- pla.switch.ref - pla.noswitch.ref)
+#gate opening cost with tyrosin manipulation and with placebo, resp.
+```
+
+```{r}
+(switch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "comparison"]
+                   [tyr.data1$PrevTrialType == "reference"], na.rm = T))         #gate closing
+(noswitch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$TrialType == "comparison"]
+                     [tyr.data1$PrevTrialType == "comparison"], na.rm = T))      #no gate closing (already closed)
+```
+```{r}
+(gate.closing <- switch.com - noswitch.com) #gate closing only in switch trials (Reference, Comparison), thus gate closing cost as (Reference, Comparison) - (Comparison, Comparison)
+```
+
+```{r}
+(tyr.switch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Tyr"]
+                   [tyr.data1$TrialType == "comparison"]
+                   [tyr.data1$PrevTrialType == "reference"], na.rm = T))         #gate closing
+(pla.switch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Pla"]
+                   [tyr.data1$TrialType == "comparison"]
+                   [tyr.data1$PrevTrialType == "reference"], na.rm = T))
+(tyr.noswitch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Tyr"]
+                     [tyr.data1$TrialType == "comparison"]
+                     [tyr.data1$PrevTrialType == "comparison"], na.rm = T))      #no gate closing (already closed)
+(pla.noswitch.com <- mean(tyr.data1$Stimulus.RT[tyr.data1$Treatment == "Pla"]
+                     [tyr.data1$TrialType == "comparison"]
+                     [tyr.data1$PrevTrialType == "comparison"], na.rm = T))
+```
+
+```{r}
+(tyr.gate.closing <- tyr.switch.com - tyr.noswitch.com)
+(pla.gate.closing <- pla.switch.com - pla.noswitch.com)
+#gate closing cost with tyrosin manipulation and with placebo, resp.
+```
+
+```{r}
+
+```
+
+
+```
+
