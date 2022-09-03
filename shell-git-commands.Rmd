@@ -43,6 +43,8 @@ To push the current branch and set the remote as upstream, use
 
     git push --set-upstream origin "Name of branch" #without ""
 
+# 5. Go to github repository and make pull request (green button)
+
 ```
 
 
