@@ -11,20 +11,45 @@ date: "2022-09-03"
 git status
 
 # 2. Add files to be committed
-git add "file name"
+git add "file name" #without ""
 
 # optional -> Show commited + changed files
 git status
 
 # 3. Commit files (imperative form, short & precise, e.g. Change function, Fix typos, Add analysis)
-git commit -m "Commit message"
+git commit -m "Commit message" #with ""
 
 # 4. Push files to git repo
 git push
 
 ```
 
-```{bash}
 
+## Create branches/pull requests
+
+```{bash}
+# 1. Create new branch
+git branch "Name of branch" #without ""
+
+# 2. Switch to new branch
+git switch "Name of branch" #without ""
+
+# 3. Commit files, see above
+git status, git add, git commit, git push
+
+# 4. First time pushing new branch: Special command needed -> copy paste git suggestion
+fatal: The current branch Add-first-analysis has no upstream branch.
+To push the current branch and set the remote as upstream, use
+
+    git push --set-upstream origin "Name of branch" #without ""
+
+```
+
+
+## Steps to pull from git repository
+
+```{bash}
+# 1.
+git pull 
 ```
 
