@@ -1,0 +1,30 @@
+---
+title: "shell-git-commands"
+output: html_document
+date: "2022-09-03"
+---
+# Useful git commands
+## Steps to push to git repository
+
+```{bash}
+# 1. Show changed files
+git status
+
+# 2. Add files to be committed
+git add "file name"
+
+# optional -> Show commited + changed files
+git status
+
+# 3. Commit files (imperative form, short & precise, e.g. Change function, Fix typos, Add analysis)
+git commit -m "Commit message"
+
+# 4. Push files to git repo
+git push
+
+```
+
+```{bash}
+
+```
+
