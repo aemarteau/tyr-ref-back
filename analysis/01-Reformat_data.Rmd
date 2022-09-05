@@ -1,0 +1,38 @@
+---
+title: "01-Reformat_data"
+author: "Annabelle Marteau"
+params:
+  data: "../data"
+  lib:  "../lib"
+  results:  "../results"
+output:
+  html_notebook:
+    theme: spacelab
+    highlight: textmate
+    toc: yes
+    number_sections: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r, results = "hide"}
+# load required packages
+library(conflicted)
+library(tidyverse)
+
+conflict_prefer("rename", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+```{r}
+# read data into memory, reformat and tidy data
+raw <- read_csv(file.path(params$data, "2-tyr_refback_data.csv"))
+
+df <- raw |> mutate_at(vars(-c("Subject", "Stimulus.RT")), factor) |>
+  rename_with(~gsub('[[:punct:]]', '', .x)) # Use consistent colnames (i.e in this case remove any dots, words in name separated by capital letter)
+```
+
+```{r}
+saveRDS(df, file = file.path(params$results, "produced_data/01-tidy_data.rds"))
+```
+

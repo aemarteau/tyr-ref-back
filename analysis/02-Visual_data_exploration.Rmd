@@ -1,0 +1,42 @@
+---
+title: "01-Reformat_data"
+author: "Annabelle Marteau"
+params:
+  data: "../data"
+  lib:  "../lib"
+  results:  "../results"
+output:
+  html_notebook:
+    theme: spacelab
+    highlight: textmate
+    toc: yes
+    number_sections: true
+    toc_depth: 3
+    toc_float: true
+---
+
+```{r, results = "hide"}
+# load required packages
+library(conflicted)
+library(tidyverse)
+
+conflict_prefer("rename", "dplyr")
+conflict_prefer("select", "dplyr")
+```
+
+```{r}
+df <- readRDS(file = file.path(params$results, "produced_data/01-tidy_data.rds"))
+```
+
+```{r}
+# Make plot using ggplot2 - part of the tidyverse package loaded above - and save output to new object p
+p <- ggplot(df, aes(x = Subject, y = StimulusRT)) +
+  scale_y_log10() +
+  geom_point(aes(fill = Treatment), size = 8, shape = 21,
+             position = position_jitter(width = 0.1, height = 0)) +
+  ggtitle("StimulusRT per Subject col by Treatment")
+
+# Save plot as A4
+ggsave(file.path(params$results, "figures/02-plot01.pdf"), plot = p, width = 297, height = 210, units = "mm")
+```
+
