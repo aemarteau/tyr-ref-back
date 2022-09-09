@@ -1,0 +1,77 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+# subset data to get balanced factor set
+```{r}
+    data <- norm_data[-c( 9, 30, 42:45 ), ]
+    m <- metadata[-c( 9, 30, 42:45 ), ]
+```
+# anova
+```{r}
+# subset
+    time_point <- factor(m$time_point2)
+    condition <- m$condition
+    sex <- m$sex
+    batch <- m$batch
+```
+```{r}
+# see if data set is balanced
+replications(~ . - val, data.frame(val = data[, 1],
+                                   batch = batch,
+                                   time_points = time_point,
+                                   condition = condition))
+```
+## condition + fold changes ?!
+```{r}
+# run anova
+    res_aov <- apply(data, 2, function(m){aov(m ~ batch + time_point + condition)})
+    pval_aov <- p.adjust( sapply(res_aov, function(res){ anova(res)$"Pr(>F)"[3]}) ) # [1]sex, [2]time_point, [3]condition
+    pval_aov[pval_aov< 0.1]
+```
+```{r}
+# run TukeyHSD
+  res_tukey <- lapply(res_aov, TukeyHSD)
+  pval_tukey <- t(sapply(res_tukey, function(res){ res$condition[,"p adj"] }))
+  pval_tukey[,pval_tukey< 0.1]
+```
+```{r} 
+# perform likelihood ratio test
+    res_aov <- apply(data, 2, function(m){anova(lm(m ~ batch + time_point), lm(m ~ batch + time_point + condition), test="LRT") })
+    pval_aov <- sapply(res_aov, function(res){ res$`Pr(>Chi)`[2]})
+    pval_aov[pval_aov < 0.1]
+```
+```{r}
+# calculate the mean for each group and metabolite
+  TP_mean <-  aggregate(norm_data[, colnames(norm_data) %in% names(pval_tukey[, pval_tukey < 0.1]) ],
+                        by = list(paste0(metadata$time_point2, metadata$condition)),
+                        FUN = mean)
+
+  # calculate fold changes relative to preceding TP
+    TP_mean$time_point <- as.factor(rep(c("TP1", "TP2", "TP3", "TP4", "TP5", "TP6"), each = 2))
+    
+   log2FoldChange <- aggregate(TP_mean[, -c(1, 8)],
+                               by = list(TP_mean$time_point),
+                               FUN = diff)
+   
+  #FoldChange <- 2^-(log2FoldChange)
+   log2FoldChange
+```
+## batch
+```{r}
+# run anova
+    res_aov <- apply(norm_data, 2, function(n){aov(n ~ metadata$batch + metadata$time_point + metadata$condition)})
+    pval_aov <- p.adjust( sapply(res_aov, function(res){ anova(res)$"Pr(>F)"[1]}) ) # [1]sex, [2]time_point, [3]condition
+    pval_aov[pval_aov < 0.1]
+```
+seems batch correction worked quite well!
+## time point
+```{r}
+# run anova + TukeyHSD to get all time point comparisons
+    res_aov <- apply(norm_data, 2, function(m){aov(m ~ metadata$batch + metadata$time_point2 + metadata$condition)})
+    res_tukey <- lapply(res_aov, TukeyHSD)
+    pval_tukey <- t(sapply(res_tukey, function(res){ res$`metadata$time_point2`[,"p adj"] }))
+```
+
+
