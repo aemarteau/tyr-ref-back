@@ -1,0 +1,316 @@
+---
+title: "R Notebook"
+output: html_notebook
+params: 
+  data: "/Users/bella/Desktop/Psychologie/Biopsychologie/Praktikum"
+---
+
+```{r}
+pacman::p_load(pacman, dplyr, GGally, ggplot2, ggthemes, 
+  ggvis, httr, lubridate, plotly, rio, rmarkdown, shiny, 
+  stringr, tidyr)
+library(tidyverse)
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+params$data
+raw.data <- read_csv(file.path(params$data, "2-tyr_refback_data.csv"))
+data <- raw.data |> mutate_at(vars(-c("Subject", "Stimulus.RT")), factor) #|>
+  #na.omit() |>
+  #filter(Stimulus.RT > 200 & Stimulus.RT < 4500) |>
+  #mutate(cutoff = mean(Stimulus.RT) + 3*sd(Stimulus.RT)) |>
+   # filter(Stimulus.RT < cutoff) |>
+  #  select(-cutoff)
+data <- data[!(data$Stimulus.RT > 4000),] |>
+  na.omit(data)
+summary(data)
+
+
+ggplot(data) +
+  geom_boxplot(aes(Treatment, log2(Stimulus.RT)))
+
+hist(data$Stimulus.RT, breaks = 15)
+c(mean = mean(data$Stimulus.RT), quantile(data$Stimulus.RT))
+log_data <- mutate(data, log_rt = log(Stimulus.RT))
+hist(log_data$log_rt)
+
+data$Switch <- factor(data$Switch,
+         levels = c(0, 1),
+         labels = c("no switch", "switch"))
+levels(data$Treatment) <- c(F, T)
+str(data$Treatment)
+data$Treatment <- as.logical(data$Treatment)
+```
+
+```{r}
+#test code, not relevant
+#tyr_data <- data |>
+ # filter(Treatment == T) #|>
+  #select(Subject, Stimulus.RT, TrialType) |>
+  #group_by(Subject) |>
+  #mutate(reference = mean(Stimulus.RT[TrialType == "reference"]),
+         #comparison = mean(Stimulus.RT[TrialType == "comparison"]),
+         #updating_cost = reference-comparison) |>
+  #summarise_at(vars(-TrialType), funs(mean(., na.rm=TRUE)))
+
+
+#test code
+library(afex)
+reg <- lm(Stimulus.RT ~Treatment, data)
+boxplot(data$Treatment, log2(data$Stimulus.RT))
+aov(reg)
+head(data, 3)
+
+data |>
+  group_by(Treatment)
+head(data, 3)
+treat_data <- data |>
+  group_by(Treatment) |>
+  get_summary_stats(Stimulus.RT, type = "mean_sd")
+
+match_data <- data |>
+  group_by(SameDiff) |>
+  get_summary_stats(Stimulus.RT, type = "mean_sd")
+
+
+ggboxplot(data, x = "Treatment", y = "Stimulus.RT", add = "line")
+ggqqplot(data, "Stimulus.RT", facet.by = "Treatment")
+
+
+#data |>
+#  select(Subject, Treatment, Stimulus.RT, PrevTrialType, TrialType, SameDiff, Switch) |>
+#  mutate(ref = mean(Stimulus.RT[TrialType == "reference"]),
+         #com = mean(Stimulus.RT[TrialType == "comparison"]),
+         #updating = ref - com) |>
+  #aggregate(updating, list(Subject), FUN=mean)
+```
+
+```{r}
+#anova with log transformed reaction times
+logStimulusRT <- log2(data$Stimulus.RT)
+res <- aov(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
+reg <- lm(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
+anova(res)#$"Pr(>F)"[2]
+anova(reg)
+
+#TukeyHSD(res)
+
+```
+
+```{r}
+#updating costs: means per subject
+#tyrosin
+(Updating_T <- data |>
+  filter(Treatment == T) |>
+  select(Subject, Stimulus.RT, TrialType) |>
+  group_by(Subject) |>
+  mutate(reference = mean(Stimulus.RT[TrialType == "reference"]),
+         comparison = mean(Stimulus.RT[TrialType == "comparison"]),
+         updating_cost = reference-comparison) |>
+  summarise_at(vars(-TrialType), funs(mean(., na.rm=TRUE)))) #summarise mean RT per subject
+updatingcost_T <- mean(Updating_T$updating_cost)
+
+#placebo
+(Updating_F <- data |>
+  filter(Treatment == F) |>
+  select(Subject, Stimulus.RT, TrialType) |>
+  group_by(Subject) |>
+  mutate(reference = mean(Stimulus.RT[TrialType == "reference"]),
+         comparison = mean(Stimulus.RT[TrialType == "comparison"]),
+         updating_cost = reference-comparison) |>
+  summarise_at(vars(-TrialType), funs(mean(., na.rm=TRUE)))) #summarise mean RT per subject
+updatingcost_F <- mean(Updating_F$updating_cost)
+
+reg_test1 <- lm(Stimulus.RT ~reference*comparison, data = Updating_T)
+anova(reg_test1)
+reg_test2 <- lm(Stimulus.RT ~reference*comparison, data = Updating_F)
+anova(reg_test2)
+
+#Update_df<- cbind(Updating_T, Updating_F)
+
+```
+
+```{r}
+#matching costs for tyrosin condition
+(Matching_T <- data |>
+  filter(Treatment == T) |>
+  select(Subject, Stimulus.RT, SameDiff) |>
+  group_by(Subject) |>
+  mutate(match = mean(Stimulus.RT[SameDiff == "Same"]),
+         mismatch = mean(Stimulus.RT[SameDiff == "Diff"]),
+         matching_cost = mismatch-match) |>
+  summarise_at(vars(-SameDiff), funs(mean(., na.rm=TRUE))))
+matchingcost_T <- mean(Matching_T$matching_cost)
+
+#matching costs for placebo condition
+(Matching_F <- data |>
+  filter(Treatment == F) |>
+  select(Subject, Stimulus.RT, SameDiff) |>
+  group_by(Subject) |>
+  mutate(match = mean(Stimulus.RT[SameDiff == "Same"]),
+         mismatch = mean(Stimulus.RT[SameDiff == "Diff"]),
+         matching_cost = mismatch-match) |>
+  summarise_at(vars(-SameDiff), funs(mean(., na.rm=TRUE))))
+matchingcost_F <- mean(Matching_F$matching_cost)
+
+
+reg_test2 <- lm(Stimulus.RT ~match*mismatch, data = Matching_T)
+anova(reg_test2)
+reg_test3 <- lm(Stimulus.RT ~match*mismatch, data = Matching_F)
+anova(reg_test3)
+```
+
+```{r}
+#calculate gate opening costs: means per subject
+#tyrosin
+(gate_opening_T <- data |>
+  filter(Treatment == T) |>
+  select(Subject, Stimulus.RT, PrevTrialType, TrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(ComRef = PrevTrialType == "comparison" & TrialType == "reference",
+         RefRef = PrevTrialType == "reference" & TrialType == "reference") |>
+  mutate(ComRef_mean = mean(Stimulus.RT[ComRef]),
+         RefRef_mean = mean(Stimulus.RT[RefRef]),
+         gate_opening_cost_T = ComRef_mean-RefRef_mean) |>
+  summarise_at(vars(-c(TrialType, PrevTrialType, Treatment)), funs(mean(., na.rm=TRUE))))
+
+gate_opening_cost_T <- mean(gate_opening_T$gate_opening_cost_T)
+
+#placebo
+(gate_opening_F <- data |>
+  filter(Treatment == F) |>
+  select(Subject, Stimulus.RT, PrevTrialType, TrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(ComRef = PrevTrialType == "comparison" & TrialType == "reference",
+         RefRef = PrevTrialType == "reference" & TrialType == "reference") |>
+  mutate(ComRef_mean = mean(Stimulus.RT[ComRef]),
+         RefRef_mean = mean(Stimulus.RT[RefRef]),
+         gate_opening_cost_F = ComRef_mean-RefRef_mean) |>
+  summarise_at(vars(-c(TrialType, PrevTrialType, Treatment)), funs(mean(., na.rm=TRUE))))
+
+gate_opening_cost_F <- mean(gate_opening_F$gate_opening_cost_F)
+```
+
+```{r}
+#gate closing costs
+(gate_closing_T <- data |>
+  filter(Treatment == T) |>
+  select(Subject, Stimulus.RT, TrialType, PrevTrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(RefCom = PrevTrialType == "reference" & TrialType == "comparison",
+         ComCom = PrevTrialType == "comparison" & TrialType == "comparison") |>
+  mutate(RefCom_mean = mean(Stimulus.RT[RefCom]),
+         ComCom_mean = mean(Stimulus.RT[ComCom]),
+         gate_closing_cost_T = RefCom_mean-ComCom_mean) |>
+  summarise_at(vars(-c(TrialType, PrevTrialType, Treatment, RefCom, ComCom)), funs(mean(., na.rm=TRUE)))
+ )
+
+gate_closing_cost_T <- mean(gate_closing_T$gate_closing_cost_T)
+
+(gate_closing_F <- data |>
+  filter(Treatment == F) |>
+  select(Subject, Stimulus.RT, TrialType, PrevTrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(RefCom = PrevTrialType == "reference" & TrialType == "comparison",
+         ComCom = PrevTrialType == "comparison" & TrialType == "comparison") |>
+  mutate(RefCom_mean = mean(Stimulus.RT[RefCom]),
+         ComCom_mean = mean(Stimulus.RT[ComCom]),
+         gate_closing_cost_F = RefCom_mean-ComCom_mean) |>
+  summarise_at(vars(-c(TrialType, PrevTrialType, Treatment, RefCom, ComCom)), funs(mean(., na.rm=TRUE)))
+  )
+
+gate_closing_cost_F <- mean(gate_closing_F$gate_closing_cost_F)
+```
+
+```{r}
+#substitution cost
+(subs_T <- data |>
+  filter(Treatment == T) |>
+  select(Subject, Stimulus.RT, SameDiff, TrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(DiffRef = SameDiff == "Diff" & TrialType == "reference",
+         SameRef = SameDiff == "Same" & TrialType == "reference",
+         DiffCom = SameDiff == "Diff" & TrialType == "comparison",
+         SameCom = SameDiff == "Same" & TrialType == "comparison") |>
+  mutate(dRef = mean(Stimulus.RT[DiffRef])-mean(Stimulus.RT[SameRef]),
+         dCom = mean(Stimulus.RT[DiffCom])-mean(Stimulus.RT[SameCom]),
+         subs_cost_T = dRef-dCom) |>
+  summarise_at(vars(-c(TrialType, SameDiff, DiffRef, SameRef, DiffCom, SameCom, Treatment)), funs(mean(., na.rm=TRUE)))
+ )
+
+(subs_F <- data |>
+  filter(Treatment == F) |>
+  select(Subject, Stimulus.RT, SameDiff, TrialType, Treatment) |>
+  group_by(Subject) |>
+  mutate(DiffRef = SameDiff == "Diff" & TrialType == "reference",
+         SameRef = SameDiff == "Same" & TrialType == "reference",
+         DiffCom = SameDiff == "Diff" & TrialType == "comparison",
+         SameCom = SameDiff == "Same" & TrialType == "comparison") |>
+  mutate(dRef = mean(Stimulus.RT[DiffRef])-mean(Stimulus.RT[SameRef]),
+             dCom = mean(Stimulus.RT[DiffCom])-mean(Stimulus.RT[SameCom]),
+             subs_cost_F = dRef-dCom) |>
+  summarise_at(vars(-c(TrialType, SameDiff, DiffRef, SameRef, DiffCom, SameCom, Treatment)), funs(mean(., na.rm=TRUE)))
+ )
+
+(mean_subs_cost_T <- mean(subs_T$subs_cost_T))
+(mean_subs_cost_F <- mean(subs_F$subs_cost_F))
+
+
+```
+
+```{r}
+df <- cbind(updatingcost_F, updatingcost_T, mean_subs_cost_F, mean_subs_cost_T, matchingcost_F, matchingcost_T, gate_opening_cost_F, gate_opening_cost_T, gate_closing_cost_F, gate_closing_cost_T)
+as.tibble(df)
+df1 <- cbind(updatingcost_T, mean_subs_cost_T, matchingcost_T, gate_opening_cost_T, gate_closing_cost_T)
+df2 <- cbind(updatingcost_F, mean_subs_cost_F, matchingcost_F, gate_opening_cost_F, gate_closing_cost_F)
+cbind(df1, df2)
+
+data.frame(
+  `Updating` = c(df1["updatingcost_T"], df2["updatingcost_F"]))#,
+  `Substitution` = c(df1$mean_subs_cost_T, df2$mean_subs_cost_F),
+  `Matching` = c(df1$matchingcost_T, df2$matchingcost_F), 
+  `Gate Opening` = c(df1$gate_opening_cost_T, df2$gate_opening_cost_F),
+  `Gate Closing` = c(df1$gate_closing_cost_T, df2$gate_closing_cost_F)
+)
+```
+
+```{r}
+split <- sample.split(log_data)
+split
+
+train_reg <- subset(log_data, split == "TRUE")
+test_reg <- subset(log_data, split == "FALSE")
+
+# Training model
+logistic_model <- glm(Treatment ~ Stimulus.RT,
+					data = log_data,
+					family = "binomial")
+logistic_model
+
+# Summary
+summary(logistic_model)
+
+# Predict test data based on model
+predict_reg <- predict(logistic_model,
+					Update_df, type = "response")
+predict_reg
+
+ROCPred <- prediction(predict_reg, Update_df$Treatment)
+ROCPer <- performance(ROCPred, measure = "tpr",
+							x.measure = "fpr")
+
+auc <- performance(ROCPred, measure = "auc")
+auc <- auc@y.values[[1]]
+auc
+auc <- round(auc, 4) 
+
+# Plotting curve
+plot(ROCPer)
+plot(ROCPer, colorize = TRUE,
+	print.cutoffs.at = seq(0.1, by = 0.1),
+	main = "ROC CURVE") +
+  abline(a = 0, b = 1) #+
+  #legend(.6, .4, auc, title = "AUC", cex = 1)
+
+```
+
