@@ -259,6 +259,7 @@ gate_closing_cost_F <- mean(gate_closing_F$gate_closing_cost_F)
 ```
 
 ```{r}
+#trying to summarise costs into tibble or df
 df <- cbind(updatingcost_F, updatingcost_T, mean_subs_cost_F, mean_subs_cost_T, matchingcost_F, matchingcost_T, gate_opening_cost_F, gate_opening_cost_T, gate_closing_cost_F, gate_closing_cost_T)
 as.tibble(df)
 df1 <- cbind(updatingcost_T, mean_subs_cost_T, matchingcost_T, gate_opening_cost_T, gate_closing_cost_T)
