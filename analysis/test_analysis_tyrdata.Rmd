@@ -276,42 +276,6 @@ data.frame(
 ```
 
 ```{r}
-split <- sample.split(log_data)
-split
-
-train_reg <- subset(log_data, split == "TRUE")
-test_reg <- subset(log_data, split == "FALSE")
-
-# Training model
-logistic_model <- glm(Treatment ~ Stimulus.RT,
-					data = log_data,
-					family = "binomial")
-logistic_model
-
-# Summary
-summary(logistic_model)
-
-# Predict test data based on model
-predict_reg <- predict(logistic_model,
-					Update_df, type = "response")
-predict_reg
-
-ROCPred <- prediction(predict_reg, Update_df$Treatment)
-ROCPer <- performance(ROCPred, measure = "tpr",
-							x.measure = "fpr")
-
-auc <- performance(ROCPred, measure = "auc")
-auc <- auc@y.values[[1]]
-auc
-auc <- round(auc, 4) 
-
-# Plotting curve
-plot(ROCPer)
-plot(ROCPer, colorize = TRUE,
-	print.cutoffs.at = seq(0.1, by = 0.1),
-	main = "ROC CURVE") +
-  abline(a = 0, b = 1) #+
-  #legend(.6, .4, auc, title = "AUC", cex = 1)
 
 ```
 
