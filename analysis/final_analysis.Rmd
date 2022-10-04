@@ -1,0 +1,231 @@
+---
+title: "R Notebook"
+output: html_notebook
+params: 
+  data: "/Users/bella/Desktop/Psychologie/Biopsychologie/Praktikum"
+---
+```{r}
+#importing & tidying data
+pacman::p_load(pacman, dplyr, GGally, ggplot2, ggthemes, 
+  ggvis, httr, lubridate, plotly, rio, rmarkdown, shiny, 
+  stringr, tidyr)
+library(tidyverse)
+library(tidyverse)
+library(ggpubr)
+library(rstatix)
+params$data
+raw.data <- read_csv(file.path(params$data, "2-tyr_refback_data.csv"))
+data <- raw.data |> mutate_at(vars(-c("Subject", "Stimulus.RT")), factor) |>
+  na.omit() |>
+  mutate(cutoff = mean(Stimulus.RT) + 3*sd(Stimulus.RT)) |> #removing extreme outliers based on 3*interquartile range
+    filter(Stimulus.RT < cutoff) |>
+    select(-cutoff) |>
+  na.omit(data)
+
+data$Switch <- factor(data$Switch,
+         levels = c(0, 1),
+         labels = c("no switch", "switch"))
+
+summary(data)
+```
+
+```{r}
+#playing around with data
+
+#visualising RT per condition
+ggplot(data) +
+  geom_boxplot(aes(Treatment, log2(Stimulus.RT)))
+
+(T_RT <- hist(data$Stimulus.RT[data$Treatment == "Tyr"], 
+             breaks = 15,
+             xlab = "RT",
+             main = "RT of Tyrosin condition"))
+(F_RT <- hist(data$Stimulus.RT[data$Treatment == "Pla"], 
+             breaks = 15,
+             xlab = "RT",
+             main = "RT of Placebo condition"))
+
+
+#plotting log transformed RT
+log_data <- mutate(data, log_rt = log(Stimulus.RT))
+hist(log_data$log_rt)
+
+#looking at differences in RT between subjects 
+subj_reg_test <- lm(log2(Stimulus.RT) ~Subject, data = data)
+anova(subj_reg_test)
+plot(lm(log2(Stimulus.RT) ~Subject, data = data))
+boxplot(log2(Stimulus.RT) ~Subject, data = data) #subjects 38 and 44 standing out in particular
+df_sub_RT <- as.data.frame(data[, c(1, 8)])
+#log2(df_sub_RT$Stimulus.RT)
+var(df_sub_RT)
+
+```
+
+```{r}
+#visualising RT
+RTpdf <- density(data$Stimulus.RT)
+
+hist(data$Stimulus.RT,
+     breaks = 15,
+     freq = F,
+     col = "thistle",
+     ylim = c(0, 0.0016),
+     xlab = "",
+     main = "RT pdf")
+curve(dnorm(x, mean = mean(data$Stimulus.RT, na.rm = T), sd = sd(data$Stimulus.RT, na.rm = T)),
+      col = "green3",
+      lwd = 2,
+      add = T)
+lines(RTpdf, col = "blue", lwd = 2)
+lines(density(data$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
+rug(data$Stimulus.RT, lwd = 0.1, col = "black")
+
+```
+
+```{r}
+#visualising RT for certain subjects
+(sub1 <- data[data$Subject == 1,])
+(sub38 <- data[data$Subject == 38,])
+(sub44 <- data[data$Subject == 44,])
+
+par(mfrow = c(3, 1))
+hist(sub1$Stimulus.RT,
+     breaks = 30,
+     freq = F,
+     col = "thistle",
+     ylim = c(0, 0.0016),
+     xlab = "",
+     main = "Subject 1: RT pdf")
+curve(dnorm(x, mean = mean(sub1$Stimulus.RT, na.rm = T), sd = sd(sub1$Stimulus.RT, na.rm = T)),
+      col = "green3",
+      lwd = 2,
+      add = T)
+lines(RTpdf, col = "blue", lwd = 2)
+lines(density(sub1$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
+rug(sub1$Stimulus.RT, lwd = 0.1, col = "black")
+
+hist(sub38$Stimulus.RT,
+     breaks = 30,
+     freq = F,
+     col = "thistle",
+     ylim = c(0, 0.0016),
+     xlab = "",
+     main = "Subject 38: RT pdf")
+curve(dnorm(x, mean = mean(sub38$Stimulus.RT, na.rm = T), sd = sd(sub38$Stimulus.RT, na.rm = T)),
+      col = "green3",
+      lwd = 2,
+      add = T)
+lines(RTpdf, col = "blue", lwd = 2)
+lines(density(sub38$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
+rug(sub38$Stimulus.RT, lwd = 0.1, col = "black")
+
+hist(sub44$Stimulus.RT,
+     breaks = 30,
+     freq = F,
+     col = "thistle",
+     ylim = c(0, 0.0016),
+     xlab = "",
+     main = "Subject 44: RT pdf")
+curve(dnorm(x, mean = mean(sub44$Stimulus.RT, na.rm = T), sd = sd(sub44$Stimulus.RT, na.rm = T)),
+      col = "green3",
+      lwd = 2,
+      add = T)
+lines(RTpdf, col = "blue", lwd = 2)
+lines(density(sub44$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
+rug(sub44$Stimulus.RT, lwd = 0.1, col = "black")
+
+ggplot(data = sub1) +
+  geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment), position = "dodge")
+ggplot(data = sub38) +
+  geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
+ggplot(data = sub44) +
+  scale_y_log10() +
+  geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
+ggplot(sub1, aes(TrialType, Stimulus.RT, color = Treatment)) +
+  geom_boxplot() +
+  geom_jitter()
+```
+
+```{r}
+#anova with log transformed reaction times
+logStimulusRT <- log2(data$Stimulus.RT)
+res <- aov(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
+reg <- lm(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
+anova(res)#$"Pr(>F)"[2]
+anova(reg)
+
+TukeyHSD(res)
+```
+
+```{r}
+#calculate process costs grouped by subjects' mean reaction times and treatment condition: Updating, matching, gate opening, gate closing and substitution
+(costs <- data |>
+  select(Subject, Treatment, Stimulus.RT, TrialType, SameDiff, PrevTrialType) |>
+  group_by(Subject, Treatment) |>
+  mutate(reference = mean(Stimulus.RT[TrialType == "reference"]),
+         comparison = mean(Stimulus.RT[TrialType == "comparison"]),
+         updating_cost = reference-comparison, #updating cost as RT difference between reference and comparison trials
+         
+         match = mean(Stimulus.RT[SameDiff == "Same"]),
+         mismatch = mean(Stimulus.RT[SameDiff == "Diff"]),
+         matching_cost = mismatch-match, #matching cost as RT difference between mismatch ("different") and match ("same") trials -> as baseline for substitution!
+         
+         ComRef_mean = mean(Stimulus.RT[PrevTrialType == "comparison" & TrialType == "reference"]),
+         RefRef_mean = mean(Stimulus.RT[PrevTrialType == "reference" & TrialType == "reference"]),
+         gate_opening_cost = ComRef_mean-RefRef_mean, #gate opening only in switch trials (Comparison, Reference), thus gate opening cost as (Comparison, Reference) - (Reference, Reference)
+         
+         RefCom_mean = mean(Stimulus.RT[PrevTrialType == "reference" & TrialType == "comparison"]),
+         ComCom_mean = mean(Stimulus.RT[PrevTrialType == "comparison" & TrialType == "comparison"]),
+         gate_closing_cost = RefCom_mean-ComCom_mean, #gate closing only in switch trials (Reference, Comparison), thus gate closing cost as (Reference, Comparison) - (Comparison, Comparison)
+         
+         dRef = mean(Stimulus.RT[SameDiff == "Diff" & TrialType == "reference"])-mean(Stimulus.RT[SameDiff == "Same" & TrialType == "reference"]),
+         dCom = mean(Stimulus.RT[SameDiff == "Diff" & TrialType == "comparison"])-mean(Stimulus.RT[SameDiff == "Same" & TrialType == "comparison"]),
+         subs_cost = dRef-dCom) |> #substitution cost defined as additional time to update new information to WM: matching cost as baseline -> difference between matching cost of reference trials and matching cost of comparison trials
+  summarise_at(vars(-c(TrialType, SameDiff, PrevTrialType)), funs(mean(., na.rm=TRUE))))
+
+#subset data frames per condition
+costs_tyr <- costs |>
+  filter(Treatment == "Tyr")
+
+costs_pla <- costs |>
+  filter(Treatment == "Pla")
+```
+
+```{r}
+#create data frame of mean costs per treatment condition
+(grouped_costs <- costs |>
+  group_by(Treatment) |>
+  summarise_at(vars(-c(Subject, reference, comparison, match, mismatch, ComRef_mean, ComCom_mean, RefRef_mean, RefCom_mean, dRef, dCom)), .funs = mean) |>
+  as.tibble())
+
+```
+
+```{r}
+#regression and anova
+
+#effects per subject
+reg_test5 <- lm(Stimulus.RT ~Subject, data = costs)
+anova(reg_test5)
+reg_test6 <- lm(Stimulus.RT ~Subject, data = data)
+anova(reg_test6)
+
+```
+
+```{r}
+#playing around with other effects in different data frames (costs, costs_tyr and costs_pla)
+#updating costs
+reg_test0 <- lm(Stimulus.RT ~reference*comparison + Treatment, data = costs)
+anova(reg_test0)
+reg_test1 <- lm(Stimulus.RT ~reference*comparison, data = costs_tyr)
+anova(reg_test1)
+reg_test2 <- lm(Stimulus.RT ~reference*comparison, data = costs_pla)
+anova(reg_test2)
+
+#matching costs
+reg_test3 <- lm(Stimulus.RT ~match*mismatch, data = costs_tyr)
+anova(reg_test3)
+reg_test4 <- lm(Stimulus.RT ~match*mismatch, data = costs_pla)
+anova(reg_test4)
+
+```
+
