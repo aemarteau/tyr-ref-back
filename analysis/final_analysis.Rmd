@@ -15,16 +15,18 @@ library(ggpubr)
 library(rstatix)
 params$data
 raw.data <- read_csv(file.path(params$data, "2-tyr_refback_data.csv"))
-data <- raw.data |> mutate_at(vars(-c("Subject", "Stimulus.RT")), factor) |>
+data <- raw.data |> mutate_at(vars(-c("Subject", "Stimulus.RT", "Stimulus.ACC", "Trial")), factor) |>
   na.omit() |>
   mutate(cutoff = mean(Stimulus.RT) + 3*sd(Stimulus.RT)) |> #removing extreme outliers based on 3*interquartile range
     filter(Stimulus.RT < cutoff) |>
     select(-cutoff) |>
-  na.omit(data)
+  na.omit(data1)
 
 data$Switch <- factor(data$Switch,
          levels = c(0, 1),
          labels = c("no switch", "switch"))
+data$Stimulus.ACC <- as.logical(data$Stimulus.ACC)
+data <- filter(data, Stimulus.ACC == T)
 
 summary(data)
 ```
@@ -36,14 +38,15 @@ summary(data)
 ggplot(data) +
   geom_boxplot(aes(Treatment, log2(Stimulus.RT)))
 
-(T_RT <- hist(data$Stimulus.RT[data$Treatment == "Tyr"], 
+T_RT <- hist(data$Stimulus.RT[data$Treatment == "Tyr"], 
              breaks = 15,
              xlab = "RT",
-             main = "RT of Tyrosin condition"))
-(F_RT <- hist(data$Stimulus.RT[data$Treatment == "Pla"], 
+             main = "RT of Tyrosin condition")
+
+F_RT <- hist(data$Stimulus.RT[data$Treatment == "Pla"], 
              breaks = 15,
              xlab = "RT",
-             main = "RT of Placebo condition"))
+             main = "RT of Placebo condition")
 
 
 #plotting log transformed RT
@@ -139,7 +142,7 @@ ggplot(data = sub1) +
 ggplot(data = sub38) +
   geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
 ggplot(data = sub44) +
-  scale_y_log10() +
+  #scale_y_log10() +
   geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
 ggplot(sub1, aes(TrialType, Stimulus.RT, color = Treatment)) +
   geom_boxplot() +
@@ -149,12 +152,22 @@ ggplot(sub1, aes(TrialType, Stimulus.RT, color = Treatment)) +
 ```{r}
 #anova with log transformed reaction times
 logStimulusRT <- log2(data$Stimulus.RT)
-res <- aov(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
-reg <- lm(logStimulusRT ~Treatment + TrialType + Switch + SameDiff, data)
+res <- aov(logStimulusRT ~Treatment + TrialType + Switch + SameDiff + Trial, data)
+reg <- lm(logStimulusRT ~Treatment + TrialType + Switch + SameDiff + Trial, data)
 anova(res)#$"Pr(>F)"[2]
 anova(reg)
 
 TukeyHSD(res)
+
+#interactions with Treatment
+res_treat <- aov(logStimulusRT ~Treatment*TrialType + Treatment*Switch + Treatment*SameDiff + Treatment*Trial, data)
+reg_treat <- lm(logStimulusRT ~Treatment*TrialType + Treatment*Switch + Treatment*SameDiff + Treatment*Trial, data)
+anova(res_treat)
+anova(reg_treat)
+
+#condition interactions
+res_int <- aov(logStimulusRT ~TrialType*Switch + TrialType*SameDiff + Switch*SameDiff, data)
+anova(res_int)
 ```
 
 ```{r}
@@ -183,20 +196,73 @@ TukeyHSD(res)
          subs_cost = dRef-dCom) |> #substitution cost defined as additional time to update new information to WM: matching cost as baseline -> difference between matching cost of reference trials and matching cost of comparison trials
   summarise_at(vars(-c(TrialType, SameDiff, PrevTrialType)), funs(mean(., na.rm=TRUE))))
 
+
+?summarise_at()
+
 #subset data frames per condition
 costs_tyr <- costs |>
   filter(Treatment == "Tyr")
 
 costs_pla <- costs |>
   filter(Treatment == "Pla")
-```
 
-```{r}
+summary(costs)
+
 #create data frame of mean costs per treatment condition
 (grouped_costs <- costs |>
   group_by(Treatment) |>
   summarise_at(vars(-c(Subject, reference, comparison, match, mismatch, ComRef_mean, ComCom_mean, RefRef_mean, RefCom_mean, dRef, dCom)), .funs = mean) |>
   as.tibble())
+```
+
+```{r}
+#visualise costs
+ggplot(costs) +
+  geom_boxplot(aes(Treatment, updating_cost, colour = Treatment))
+
+ggplot(costs) +
+  geom_boxplot(aes(Treatment, matching_cost, colour = Treatment))
+
+ggplot(costs) +
+  geom_boxplot(aes(Treatment, gate_opening_cost, colour = Treatment))
+
+ggplot(costs) +
+  geom_boxplot(aes(Treatment, gate_closing_cost, colour = Treatment))
+
+ggplot(costs) +
+  geom_boxplot(aes(Treatment, subs_cost, colour = Treatment))
+
+#visualise correlations of treatments and cost
+costs_plots <- costs |>
+  transmute(up = updating_cost[Treatment == "Tyr"]-updating_cost[Treatment == "Pla"], 
+         up_pla = updating_cost[Treatment == "Pla"],
+         open = gate_opening_cost[Treatment == "Tyr"]-gate_opening_cost[Treatment == "Pla"], 
+         open_pla = gate_opening_cost[Treatment == "Pla"],
+         close = gate_closing_cost[Treatment == "Tyr"]-gate_closing_cost[Treatment == "Pla"], 
+         close_pla = gate_closing_cost[Treatment == "Pla"])
+
+ggplot(costs_plots, aes(x = up_pla, y = up)) +
+  geom_jitter(aes(colour = Subject)) +
+  geom_smooth(method = 'lm', se = F)
+
+ggplot(costs_plots, aes(x = open_pla, y = open)) +
+  geom_jitter(aes(colour = Subject)) +
+  geom_smooth(method = 'lm', se = F)
+
+ggplot(costs_plots, aes(x = close_pla, y = close)) +
+  geom_jitter(aes(colour = Subject)) +
+  geom_smooth(method = 'lm', se = F)
+
+
+#regression 
+up_res <- lm(up_pla ~up, costs_plots)
+open_res <- lm(open_pla ~open, costs_plots)
+close_res <- lm(close_pla ~close, costs_plots)
+anova(up_res)
+anova(open_res)
+anova(close_res)
+
+cor(costs_plots)
 
 ```
 
@@ -227,5 +293,53 @@ anova(reg_test3)
 reg_test4 <- lm(Stimulus.RT ~match*mismatch, data = costs_pla)
 anova(reg_test4)
 
+```
+
+```{r}
+#correlations between effects
+var(costs_tyr[, c(1, 6, 9, 12, 15, 18)])
+var(costs_pla[, c(1, 6, 9, 12, 15, 18)])
+var(costs[, c(1, 6, 9, 12, 15, 18)])
+
+
+#correlations of effects and subject differences
+ggplot(costs, aes(Subject, updating_cost, colour = Treatment)) +
+  geom_jitter() +
+  geom_smooth(method = "lm",se = F)
+
+ggplot(costs, aes(Subject, matching_cost, colour = Treatment)) +
+  geom_jitter() +
+  geom_smooth(method = "lm",se = F)
+
+ggplot(costs, aes(Subject, gate_opening_cost, colour = Treatment)) +
+  geom_jitter() +
+  geom_smooth(method = "lm",se = F)
+
+ggplot(costs, aes(Subject, gate_closing_cost, colour = Treatment)) +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = F)
+
+ggplot(costs, aes(Subject, subs_cost, colour = Treatment)) +
+  geom_jitter() +
+  geom_smooth(method = "lm", se = F)
+```
+
+```{r}
+#correlations of effects and subject differences
+res_up <- lm(updating_cost ~Subject, data = costs)
+anova(res_up)
+res_match <- lm(matching_cost ~Subject, data = costs)
+anova(res_match)
+res_open <- lm(gate_opening_cost ~Subject, data = costs)
+anova(res_open)
+res_close <- lm(gate_closing_cost ~Subject, data = costs)
+anova(res_close)
+res_subs <- lm(subs_cost ~Subject, data = costs)
+anova(res_subs)
+
+ggplot(data = costs, aes(Subject, updating_cost)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = T)
+  
 ```
 
