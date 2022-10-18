@@ -20,15 +20,25 @@ data <- raw.data |> mutate_at(vars(-c("Subject", "Stimulus.RT", "Stimulus.ACC", 
   mutate(cutoff = mean(Stimulus.RT) + 3*sd(Stimulus.RT)) |> #removing extreme outliers based on 3*interquartile range
     filter(Stimulus.RT < cutoff) |>
     select(-cutoff) |>
+    filter(!Stimulus.RT < 100) |>
   na.omit(data1)
 
 data$Switch <- factor(data$Switch,
          levels = c(0, 1),
          labels = c("no switch", "switch"))
 data$Stimulus.ACC <- as.logical(data$Stimulus.ACC)
-data <- filter(data, Stimulus.ACC == T)
-
+#i1 <- which(data$Stimulus.ACC == F)
+data <- data |>
+  mutate(ACC = Stimulus.ACC == 0 | lag(Stimulus.ACC) == 0) |>
+  subset(ACC == 0) #removing rows where accuracy = 0 (here 1) and next row
+data <- data[data$Subject != 38 & data$Subject != 44, ] #remove subjects with extreme outliers (see paper)
 summary(data)
+```
+
+```{r}
+
+#i1 <-  which(data$Stimulus.ACC == F)
+#data[unique(sort(i1 + rep(0:5, each = length(i1)))),]
 ```
 
 ```{r}
@@ -56,8 +66,8 @@ hist(log_data$log_rt)
 #looking at differences in RT between subjects 
 subj_reg_test <- lm(log2(Stimulus.RT) ~Subject, data = data)
 anova(subj_reg_test)
-plot(lm(log2(Stimulus.RT) ~Subject, data = data))
-boxplot(log2(Stimulus.RT) ~Subject, data = data) #subjects 38 and 44 standing out in particular
+plot(lm(log10(Stimulus.RT) ~Subject, data = data))
+boxplot(log10(Stimulus.RT) ~Subject, data = data) #subjects 38 and 44 standing out in particular
 df_sub_RT <- as.data.frame(data[, c(1, 8)])
 #log2(df_sub_RT$Stimulus.RT)
 var(df_sub_RT)
@@ -68,19 +78,29 @@ var(df_sub_RT)
 #visualising RT
 RTpdf <- density(data$Stimulus.RT)
 
+RT_tyr <- data$Stimulus.RT[data$Treatment == "Tyr"]
+RT_pla <- data$Stimulus.RT[data$Treatment == "Pla"]
+?hist
 hist(data$Stimulus.RT,
      breaks = 15,
      freq = F,
-     col = "thistle",
-     ylim = c(0, 0.0016),
+     col = "white",
+     ylim = c(0, 0.0017),
      xlab = "",
-     main = "RT pdf")
-curve(dnorm(x, mean = mean(data$Stimulus.RT, na.rm = T), sd = sd(data$Stimulus.RT, na.rm = T)),
+     main = "RT pdf",
+     sub = "for tyrosin (red, orange, yellow) and placebo (green, blue, purple) condition")
+curve(dnorm(x, mean = mean(RT_tyr, na.rm = T), sd = sd(data$Stimulus.RT, na.rm = T)),
+      col = "orange",
+      lwd = 2,
+      add = T)
+curve(dnorm(x, mean = mean(RT_pla, na.rm = T), sd = sd(data$Stimulus.RT, na.rm = T)),
       col = "green3",
       lwd = 2,
       add = T)
-lines(RTpdf, col = "blue", lwd = 2)
-lines(density(data$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
+lines(density(RT_tyr), col = "yellow", lwd = 2)
+lines(density(RT_pla), col = "purple", lwd = 2)
+lines(density(RT_tyr, adjust = 3), col = "red", lwd = 2)
+lines(density(RT_pla, adjust = 3), col = "blue", lwd = 2)
 rug(data$Stimulus.RT, lwd = 0.1, col = "black")
 
 ```
@@ -136,14 +156,17 @@ curve(dnorm(x, mean = mean(sub44$Stimulus.RT, na.rm = T), sd = sd(sub44$Stimulus
 lines(RTpdf, col = "blue", lwd = 2)
 lines(density(sub44$Stimulus.RT, adjust = 3), col = "red", lwd = 2)
 rug(sub44$Stimulus.RT, lwd = 0.1, col = "black")
+```
 
+
+```{r}
 ggplot(data = sub1) +
   geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment), position = "dodge")
-ggplot(data = sub38) +
-  geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
-ggplot(data = sub44) +
+#ggplot(data = sub38) +
+ # geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
+#ggplot(data = sub44) +
   #scale_y_log10() +
-  geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
+ # geom_boxplot(mapping = aes(x = TrialType, y = Stimulus.RT, color = Treatment))
 ggplot(sub1, aes(TrialType, Stimulus.RT, color = Treatment)) +
   geom_boxplot() +
   geom_jitter()
@@ -157,7 +180,7 @@ reg <- lm(logStimulusRT ~Treatment + TrialType + Switch + SameDiff + Trial, data
 anova(res)#$"Pr(>F)"[2]
 anova(reg)
 
-TukeyHSD(res)
+#TukeyHSD(res)
 
 #interactions with Treatment
 res_treat <- aov(logStimulusRT ~Treatment*TrialType + Treatment*Switch + Treatment*SameDiff + Treatment*Trial, data)
@@ -213,6 +236,12 @@ summary(costs)
   group_by(Treatment) |>
   summarise_at(vars(-c(Subject, reference, comparison, match, mismatch, ComRef_mean, ComCom_mean, RefRef_mean, RefCom_mean, dRef, dCom)), .funs = mean) |>
   as.tibble())
+
+install.packages("gridExtra")
+library("gridExtra")  
+#costs_head <- head(grouped_costs)  
+#pdf("costs.pdf")
+#grid.table(grouped_costs)
 ```
 
 ```{r}
@@ -243,17 +272,25 @@ costs_plots <- costs |>
 
 ggplot(costs_plots, aes(x = up_pla, y = up)) +
   geom_jitter(aes(colour = Subject)) +
-  geom_smooth(method = 'lm', se = F)
+  geom_smooth(method = 'lm', se = F) +
+  ggtitle("Pearson r correlations of placebo performance and the L-tyrosine \nminus placebo performance") +
+  labs(y = "Updating cost (Tyrosin - Placebo)", x = "Updating cost (Placebo)")
 
 ggplot(costs_plots, aes(x = open_pla, y = open)) +
   geom_jitter(aes(colour = Subject)) +
-  geom_smooth(method = 'lm', se = F)
+  geom_smooth(method = 'lm', se = F) +
+  ggtitle("Pearson r correlations of placebo performance and the L-tyrosine \nminus placebo performance") +
+  labs(y = "Gate opening cost (Tyrosin - Placebo)", x = "Gate opening cost (Placebo)")
 
 ggplot(costs_plots, aes(x = close_pla, y = close)) +
   geom_jitter(aes(colour = Subject)) +
-  geom_smooth(method = 'lm', se = F)
+  geom_smooth(method = 'lm', se = F) +
+  ggtitle("Pearson r correlations of placebo performance and the L-tyrosine \nminus placebo performance") +
+  labs(y = "Gate closing cost (Tyrosin - Placebo)", x = "Gate closing cost (Placebo)")
+```
 
 
+```{r}
 #regression 
 up_res <- lm(up_pla ~up, costs_plots)
 open_res <- lm(open_pla ~open, costs_plots)
@@ -301,27 +338,65 @@ var(costs_tyr[, c(1, 6, 9, 12, 15, 18)])
 var(costs_pla[, c(1, 6, 9, 12, 15, 18)])
 var(costs[, c(1, 6, 9, 12, 15, 18)])
 
+looptest <- select(costs, Subject, Treatment, updating_cost, matching_cost, gate_opening_cost, gate_closing_cost, subs_cost)
+
+#for (i in looptest) {
+ # print(ggplot(costs, aes(x = Subject, y = i, colour = Treatment)) +
+  #      geom_jitter() +
+   #     geom_smooth(method = "lm",se = F) +
+    #    ylab("cost per subject",  min.depth, "to",max.depth,"m", sep=" "))
+#}
+
+#for (i in 2:ncol(looptest)) {
+ # print(ggplot(costs, aes(x = Subject, y = looptest[ , i], colour = Treatment)) +
+  #      geom_jitter() +
+   #     geom_smooth(method = "lm", se = F)) +
+    #    ylab(looptest[ , i])
+#}
+
+df_rel <- costs |>
+  ungroup(Treatment) |>
+  transmute(up_p = updating_cost[Treatment == "Pla"],
+         up_t = updating_cost[Treatment == "Tyr"],
+         match_p = matching_cost[Treatment == "Pla"],
+         match_t = matching_cost[Treatment == "Tyr"],
+         open_p = gate_opening_cost[Treatment == "Pla"],
+         open_t = gate_opening_cost[Treatment == "Tyr"],
+         close_p = gate_closing_cost[Treatment == "Pla"],
+         close_t = gate_closing_cost[Treatment == "Tyr"],
+         subs_p = subs_cost[Treatment == "Pla"], 
+         subs_t = subs_cost[Treatment == "Tyr"])
 
 #correlations of effects and subject differences
-ggplot(costs, aes(Subject, updating_cost, colour = Treatment)) +
+ggplot(df_rel, aes(up_p, up_t)) +
   geom_jitter() +
-  geom_smooth(method = "lm",se = F)
+  geom_smooth(method = "lm",se = F) +
+  ggtitle("Correlations of effects per treatment") +
+  labs(x = "Updating cost (Placebo)", y = "Updating cost (Tyrosin)")
 
-ggplot(costs, aes(Subject, matching_cost, colour = Treatment)) +
+ggplot(df_rel, aes(match_p, match_t)) +
   geom_jitter() +
-  geom_smooth(method = "lm",se = F)
+  geom_smooth(method = "lm",se = F) +
+  ggtitle("Correlations of effects per treatment") +
+  labs(x = "Matching cost (Placebo)", y = "Matching cost (Tyrosin)")
 
-ggplot(costs, aes(Subject, gate_opening_cost, colour = Treatment)) +
+ggplot(df_rel, aes(open_p, open_t)) +
   geom_jitter() +
-  geom_smooth(method = "lm",se = F)
+  geom_smooth(method = "lm",se = F) +
+  ggtitle("Correlations of effects per treatment") +
+  labs(x = "Gate opening cost (Placebo)", y = "Gate opening cost (Tyrosin)")
 
-ggplot(costs, aes(Subject, gate_closing_cost, colour = Treatment)) +
+ggplot(df_rel, aes(close_p, close_t)) +
   geom_jitter() +
-  geom_smooth(method = "lm", se = F)
+  geom_smooth(method = "lm", se = F)+
+  ggtitle("Correlations of effects per treatment") +
+  labs(x = "Gate closing cost (Placebo)", y = "Gate closing cost (Tyrosin)")
 
-ggplot(costs, aes(Subject, subs_cost, colour = Treatment)) +
+ggplot(df_rel, aes(subs_p, subs_t)) +
   geom_jitter() +
-  geom_smooth(method = "lm", se = F)
+  geom_smooth(method = "lm", se = F) +
+  ggtitle("Correlations of effects per treatment") +
+  labs(x = "Substitution cost (Placebo)", y = "Substitution cost (Tyrosin)")
 ```
 
 ```{r}
